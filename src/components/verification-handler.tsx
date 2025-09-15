@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { useSearchParams } from "next/navigation"
+import { Link, useSearchParams } from "react-router-dom"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -8,7 +8,7 @@ import { CheckCircle, XCircle, Loader2, ArrowRight, RefreshCw } from "lucide-rea
 type VerificationState = "loading" | "success" | "error" | "expired" | "invalid"
 
 export function VerificationHandler() {
-  const searchParams = useSearchParams()
+  const [searchParams] = useSearchParams()
   const [state, setState] = useState<VerificationState>("loading")
   const [error, setError] = useState("")
   const [email, setEmail] = useState("")
@@ -124,10 +124,10 @@ export function VerificationHandler() {
             </div>
             {type === "signup" && (
               <Button asChild className="w-full">
-                <a href="/">
+                <Link to="/">
                   Continue to sign in
                   <ArrowRight className="w-4 h-4 ml-2" />
-                </a>
+                </Link>
               </Button>
             )}
           </div>
@@ -183,7 +183,7 @@ export function VerificationHandler() {
               )}
 
               <Button variant="ghost" asChild className="w-full">
-                <a href="/">Back to sign in</a>
+                <Link to="/">Back to sign in</Link>
               </Button>
             </div>
           </div>

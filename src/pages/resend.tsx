@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom"
+
 import { ResendForm } from "@/components/resend-form"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -24,9 +26,9 @@ export default function ResendPage() {
 
         <div className="text-center text-sm text-muted-foreground">
           Remember your login details?{" "}
-          <a href="/" className="font-medium text-primary hover:underline transition-colors">
+          <Link to="/" className="font-medium text-primary hover:underline transition-colors">
             Back to sign in
-          </a>
+          </Link>
         </div>
       </div>
     </div>

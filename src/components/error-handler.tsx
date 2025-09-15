@@ -1,11 +1,12 @@
-import { useSearchParams } from "next/navigation"
+import { Link, useSearchParams } from "react-router-dom"
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { XCircle, RefreshCw, ArrowLeft, Mail, AlertTriangle } from "lucide-react"
 
 export function ErrorHandler() {
-  const searchParams = useSearchParams()
+  const [searchParams] = useSearchParams()
 
   const type = searchParams.get("type") || "default"
   const message = searchParams.get("message")
@@ -99,6 +100,57 @@ export function ErrorHandler() {
   const config = getErrorConfig(type)
   const IconComponent = config.icon
 
+  const isInternalLink = (href: string | undefined) => !!href && href.startsWith("/")
+
+  const renderPrimaryAction = () => {
+    if (config.primaryAction.onClick) {
+      return (
+        <Button onClick={config.primaryAction.onClick} className="w-full">
+          {config.primaryAction.text}
+        </Button>
+      )
+    }
+
+    if (isInternalLink(config.primaryAction.href)) {
+      return (
+        <Button asChild className="w-full">
+          <Link to={config.primaryAction.href!}>{config.primaryAction.text}</Link>
+        </Button>
+      )
+    }
+
+    return (
+      <Button asChild className="w-full">
+        <a href={config.primaryAction.href}>{config.primaryAction.text}</a>
+      </Button>
+    )
+  }
+
+  const renderSecondaryAction = () => {
+    if (!config.secondaryAction) return null
+
+    const content = (
+      <>
+        <ArrowLeft className="w-4 h-4 mr-2" />
+        {config.secondaryAction.text}
+      </>
+    )
+
+    if (isInternalLink(config.secondaryAction.href)) {
+      return (
+        <Button variant="ghost" asChild className="w-full">
+          <Link to={config.secondaryAction.href!}>{content}</Link>
+        </Button>
+      )
+    }
+
+    return (
+      <Button variant="ghost" asChild className="w-full">
+        <a href={config.secondaryAction.href}>{content}</a>
+      </Button>
+    )
+  }
+
   const handleResendEmail = async () => {
     if (!email) return
 
@@ -150,22 +202,9 @@ export function ErrorHandler() {
               </Button>
             )}
 
-            <Button onClick={config.primaryAction.onClick} asChild={!config.primaryAction.onClick} className="w-full">
-              {config.primaryAction.onClick ? (
-                <>{config.primaryAction.text}</>
-              ) : (
-                <a href={config.primaryAction.href}>{config.primaryAction.text}</a>
-              )}
-            </Button>
+            {renderPrimaryAction()}
 
-            {config.secondaryAction && (
-              <Button variant="ghost" asChild className="w-full">
-                <a href={config.secondaryAction.href}>
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  {config.secondaryAction.text}
-                </a>
-              </Button>
-            )}
+            {renderSecondaryAction()}
           </div>
         </div>
       </CardContent>

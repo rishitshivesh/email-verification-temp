@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom"
+
 import { LoginForm } from "@/components/login-form"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -22,9 +24,9 @@ export default function HomePage() {
 
         <div className="text-center text-sm text-muted-foreground">
           Don't have an account?{" "}
-          <a href="/signup" className="font-medium text-primary hover:underline transition-colors">
+          <Link to="/signup" className="font-medium text-primary hover:underline transition-colors">
             Create one here
-          </a>
+          </Link>
         </div>
       </div>
     </div>
