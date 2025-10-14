@@ -28,7 +28,7 @@ export function SignupForm() {
     setError("")
 
     try {
-      // Replace with your actual API call
+      // Replace with actual API call
       const response = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

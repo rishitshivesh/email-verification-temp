@@ -155,7 +155,7 @@ export function ErrorHandler() {
     if (!email) return
 
     try {
-      // This would call your resend API
+      // This would call resend API
       const response = await fetch("/api/auth/resend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

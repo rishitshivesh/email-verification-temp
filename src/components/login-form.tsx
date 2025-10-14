@@ -19,7 +19,7 @@ export function LoginForm() {
     setError("")
 
     try {
-      // Replace with your actual API call
+      // Replace with actual API call
       const response = await fetch("/api/auth/magic-link", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
