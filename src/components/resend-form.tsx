@@ -1,87 +1,82 @@
-import type React from "react"
+import type React from "react";
 
-import { useState } from "react"
-import { Link } from "react-router-dom"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Loader2, Mail, ArrowRight, RefreshCw } from "lucide-react"
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { toast } from "react-hot-toast";
 
-type ResendType = "login" | "signup" | "verification"
+import { getDefaultLoginRedirect, parseAxiosError, requestMagicLink } from "@/lib/auth-service";
+import { buildAppUrl } from "@/lib/config";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Loader2, Mail, ArrowRight, RefreshCw } from "lucide-react";
+
+type ResendType = "login" | "signup" | "verification";
+
+const encodeState = (state: unknown) => window.btoa(JSON.stringify(state));
 
 export function ResendForm() {
-  const [email, setEmail] = useState("")
-  const [type, setType] = useState<ResendType>("login")
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState("")
-  const [isEmailSent, setIsEmailSent] = useState(false)
+  const [email, setEmail] = useState("");
+  const [type, setType] = useState<ResendType>("login");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [isEmailSent, setIsEmailSent] = useState(false);
+
+  const defaultLoginRedirect = useMemo(() => getDefaultLoginRedirect(), []);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError("")
+    e.preventDefault();
+    setIsLoading(true);
+    setError("");
 
     try {
-      const endpoint = getEndpointForType(type)
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.message || "Failed to send email")
-      }
-
-      setIsEmailSent(true)
+      const state = encodeState({
+        type,
+        requestedAt: Date.now(),
+        redirect: type === "login" ? defaultLoginRedirect : "/",
+      });
+      const url = new URL(buildAppUrl("/verify"));
+      url.searchParams.set("type", type);
+      url.searchParams.set("state", state);
+      const response = await requestMagicLink({ email, redirectUrl: url.toString(), state });
+      setIsEmailSent(true);
+      toast.success(response.message ?? getSuccessMessage(type));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to send email. Please try again.")
+      const { message } = parseAxiosError(err);
+      setError(message);
+      toast.error(message);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
-  const getEndpointForType = (type: ResendType) => {
-    switch (type) {
+  const getTypeDescription = (value: ResendType) => {
+    switch (value) {
       case "login":
-        return "/api/auth/resend-login"
+        return "Send a new magic login link";
       case "signup":
-        return "/api/auth/resend-signup"
+        return "Resend account verification email";
       case "verification":
-        return "/api/auth/resend-verification"
+        return "Resend email verification link";
       default:
-        return "/api/auth/resend-login"
+        return "Send a new magic login link";
     }
-  }
+  };
 
-  const getTypeDescription = (type: ResendType) => {
-    switch (type) {
+  const getSuccessMessage = (value: ResendType) => {
+    switch (value) {
       case "login":
-        return "Send a new magic login link"
+        return "We've sent a new magic login link to your email address.";
       case "signup":
-        return "Resend account verification email"
+        return "We've resent the account verification email. Please check your inbox.";
       case "verification":
-        return "Resend email verification link"
+        return "We've sent a new verification link to your email address.";
       default:
-        return "Send a new magic login link"
+        return "We've sent a new email to your address.";
     }
-  }
-
-  const getSuccessMessage = (type: ResendType) => {
-    switch (type) {
-      case "login":
-        return "We've sent a new magic login link to your email address."
-      case "signup":
-        return "We've resent the account verification email. Please check your inbox."
-      case "verification":
-        return "We've sent a new verification link to your email address."
-      default:
-        return "We've sent a new email to your address."
-    }
-  }
+  };
 
   if (isEmailSent) {
     return (
@@ -105,7 +100,7 @@ export function ResendForm() {
           </Button>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -178,5 +173,5 @@ export function ResendForm() {
         Make sure to check your spam folder if you don't see the email in your inbox.
       </div>
     </form>
-  )
+  );
 }

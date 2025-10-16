@@ -17,6 +17,17 @@ export default [
           jsx: true,
         },
       },
+      globals: {
+        window: "readonly",
+        document: "readonly",
+        console: "readonly",
+        URL: "readonly",
+        setTimeout: "readonly",
+        HTMLElement: "readonly",
+        HTMLInputElement: "readonly",
+        btoa: "readonly",
+        atob: "readonly",
+      },
     },
     plugins: {
       "@typescript-eslint": tsPlugin,

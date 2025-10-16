@@ -1,95 +1,117 @@
-import { useEffect, useState } from "react"
-import { Link, useSearchParams } from "react-router-dom"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { CheckCircle, XCircle, Loader2, ArrowRight, RefreshCw } from "lucide-react"
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { toast } from "react-hot-toast";
 
-type VerificationState = "loading" | "success" | "error" | "expired" | "invalid"
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { getDefaultLoginRedirect, requestMagicLink, verifyMagicLink, parseAxiosError } from "@/lib/auth-service";
+import { buildAppUrl } from "@/lib/config";
+import { CheckCircle, XCircle, Loader2, ArrowRight, RefreshCw } from "lucide-react";
+
+type VerificationState = "loading" | "success" | "error" | "expired" | "invalid";
+
+type DecodedState = { redirect?: string } | undefined;
+
+const encodeState = (state: unknown) => window.btoa(JSON.stringify(state));
+
+function decodeState(value: string | null): DecodedState {
+  if (!value) return undefined;
+  try {
+    return JSON.parse(window.atob(value)) as DecodedState;
+  } catch (error) {
+    console.warn("Failed to decode state", error);
+    return undefined;
+  }
+}
+
+function mapErrorToState(errorCode?: string, status?: number): VerificationState {
+  if (errorCode === "TOKEN_EXPIRED" || status === 401) {
+    return "expired";
+  }
+  if (errorCode === "TOKEN_ALREADY_USED" || errorCode === "INVALID_TOKEN" || status === 400) {
+    return "invalid";
+  }
+  return "error";
+}
 
 export function VerificationHandler() {
-  const [searchParams] = useSearchParams()
-  const [state, setState] = useState<VerificationState>("loading")
-  const [error, setError] = useState("")
-  const [email, setEmail] = useState("")
-  const [isResending, setIsResending] = useState(false)
+  const [searchParams] = useSearchParams();
+  const [state, setState] = useState<VerificationState>("loading");
+  const [error, setError] = useState("");
+  const [email, setEmail] = useState("");
+  const [isResending, setIsResending] = useState(false);
 
-  const token = searchParams.get("token")
-  const type = searchParams.get("type") // "login" or "signup"
+  const token = searchParams.get("token");
+  const type = searchParams.get("type") ?? "login";
+  const rawState = searchParams.get("state");
+  const decodedState = useMemo(() => decodeState(rawState), [rawState]);
 
   useEffect(() => {
     if (!token) {
-      setState("invalid")
-      setError("No verification token provided")
-      return
+      setState("invalid");
+      setError("No verification token provided");
+      toast.error("Verification token is missing.");
+      return;
     }
 
-    verifyToken(token, type || "login")
-  }, [token, type])
+    let isActive = true;
+    const verify = async () => {
+      setState("loading");
+      setError("");
 
-  const verifyToken = async (token: string, verificationType: string) => {
-    try {
-      const response = await fetch("/api/auth/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, type: verificationType }),
-      })
+      try {
+        const verificationResult = await verifyMagicLink(token, rawState ?? undefined);
+        if (!isActive) return;
+        setEmail(verificationResult.user.email);
+        setState("success");
+        toast.success(type === "signup" ? "Account verified successfully." : "You're now signed in.");
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        if (response.status === 410) {
-          setState("expired")
-          setError("This verification link has expired")
-        } else {
-          setState("error")
-          setError(data.message || "Verification failed")
+        if (type !== "signup") {
+          const redirectTarget = decodedState?.redirect ?? getDefaultLoginRedirect();
+          setTimeout(() => {
+            window.location.href = redirectTarget;
+          }, 1500);
         }
-        setEmail(data.email || "")
-        return
+      } catch (err) {
+        if (!isActive) return;
+        const parsed = parseAxiosError(err);
+        setError(parsed.message);
+        setState(mapErrorToState(parsed.code, parsed.status));
+        toast.error(parsed.message);
       }
+    };
 
-      setState("success")
-      setEmail(data.email || "")
+    void verify();
 
-      // Redirect after successful verification
-      if (verificationType === "login") {
-        // Redirect to dashboard or intended page
-        setTimeout(() => {
-          window.location.href = "/dashboard"
-        }, 2000)
-      }
-    } catch (err) {
-      setState("error")
-      setError("Network error. Please try again.")
-    }
-  }
+    return () => {
+      isActive = false;
+    };
+  }, [token, type, rawState, decodedState?.redirect]);
 
   const handleResendVerification = async () => {
-    if (!email) return
+    if (!email) return;
 
-    setIsResending(true)
+    setIsResending(true);
     try {
-      const endpoint = type === "signup" ? "/api/auth/resend-signup" : "/api/auth/resend-login"
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      })
-
-      if (response.ok) {
-        setState("loading")
-        setError("")
-      } else {
-        const data = await response.json()
-        setError(data.message || "Failed to resend verification")
-      }
+      const statePayload = encodeState({
+        type,
+        requestedAt: Date.now(),
+        redirect: type === "login" ? decodedState?.redirect ?? getDefaultLoginRedirect() : "/",
+      });
+      const url = new URL(buildAppUrl("/verify"));
+      url.searchParams.set("type", type);
+      url.searchParams.set("state", statePayload);
+      const response = await requestMagicLink({ email, redirectUrl: url.toString(), state: statePayload });
+      toast.success(response.message ?? "We've sent a new link to your inbox.");
     } catch (err) {
-      setError("Failed to resend verification")
+      const parsed = parseAxiosError(err);
+      setError(parsed.message);
+      toast.error(parsed.message);
     } finally {
-      setIsResending(false)
+      setIsResending(false);
     }
-  }
+  };
 
   const renderContent = () => {
     switch (state) {
@@ -104,7 +126,7 @@ export function VerificationHandler() {
               <p className="text-sm text-muted-foreground">Please wait while we verify your request</p>
             </div>
           </div>
-        )
+        );
 
       case "success":
         return (
@@ -131,7 +153,7 @@ export function VerificationHandler() {
               </Button>
             )}
           </div>
-        )
+        );
 
       case "expired":
       case "error":
@@ -162,12 +184,7 @@ export function VerificationHandler() {
 
             <div className="space-y-2">
               {email && (state === "expired" || state === "error") && (
-                <Button
-                  onClick={handleResendVerification}
-                  disabled={isResending}
-                  variant="outline"
-                  className="w-full bg-transparent"
-                >
+                <Button onClick={handleResendVerification} disabled={isResending} variant="outline" className="w-full bg-transparent">
                   {isResending ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -187,12 +204,12 @@ export function VerificationHandler() {
               </Button>
             </div>
           </div>
-        )
+        );
 
       default:
-        return null
+        return null;
     }
-  }
+  };
 
   return (
     <Card className="border-0 shadow-lg">
@@ -204,5 +221,5 @@ export function VerificationHandler() {
       </CardHeader>
       <CardContent>{renderContent()}</CardContent>
     </Card>
-  )
+  );
 }
