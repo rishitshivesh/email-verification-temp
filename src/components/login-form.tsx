@@ -1,42 +1,47 @@
-import type React from "react"
+import type React from "react";
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, Mail, ArrowRight } from "lucide-react"
+import { useMemo, useState } from "react";
+import { toast } from "react-hot-toast";
+
+import { getDefaultLoginRedirect, parseAxiosError, requestMagicLink } from "@/lib/auth-service";
+import { buildAppUrl } from "@/lib/config";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2, Mail, ArrowRight } from "lucide-react";
+
+const encodeState = (state: unknown) => window.btoa(JSON.stringify(state));
 
 export function LoginForm() {
-  const [email, setEmail] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState("")
-  const [isEmailSent, setIsEmailSent] = useState(false)
+  const [email, setEmail] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [isEmailSent, setIsEmailSent] = useState(false);
+
+  const defaultRedirect = useMemo(() => getDefaultLoginRedirect(), []);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError("")
+    e.preventDefault();
+    setIsLoading(true);
+    setError("");
 
     try {
-      // Replace with actual API call
-      const response = await fetch("/api/auth/magic-link", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to send magic link")
-      }
-
-      setIsEmailSent(true)
+      const state = encodeState({ type: "login", requestedAt: Date.now(), redirect: defaultRedirect });
+      const url = new URL(buildAppUrl("/verify"));
+      url.searchParams.set("type", "login");
+      url.searchParams.set("state", state);
+      const response = await requestMagicLink({ email, redirectUrl: url.toString(), state });
+      setIsEmailSent(true);
+      toast.success(response.message ?? "If this email is registered, you'll receive a magic link shortly.");
     } catch (err) {
-      setError("Failed to send login link. Please try again.")
+      const { message } = parseAxiosError(err);
+      setError(message);
+      toast.error(message);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   if (isEmailSent) {
     return (
@@ -54,7 +59,7 @@ export function LoginForm() {
           Send another link
         </Button>
       </div>
-    )
+    );
   }
 
   return (
@@ -93,5 +98,5 @@ export function LoginForm() {
         )}
       </Button>
     </form>
-  )
+  );
 }

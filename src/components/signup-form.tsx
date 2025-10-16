@@ -1,52 +1,58 @@
-import type React from "react"
+import type React from "react";
 
-import { useState } from "react"
-import { Link } from "react-router-dom"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, Mail, ArrowRight, User } from "lucide-react"
+import { useState } from "react";
+import { toast } from "react-hot-toast";
+
+import { parseAxiosError, requestMagicLink } from "@/lib/auth-service";
+import { buildAppUrl } from "@/lib/config";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2, Mail, ArrowRight, User } from "lucide-react";
+
+const encodeState = (state: unknown) => window.btoa(JSON.stringify(state));
 
 export function SignupForm() {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
-  })
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState("")
-  const [isEmailSent, setIsEmailSent] = useState(false)
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [isEmailSent, setIsEmailSent] = useState(false);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
-  }
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError("")
+    e.preventDefault();
+    setIsLoading(true);
+    setError("");
 
     try {
-      // Replace with actual API call
-      const response = await fetch("/api/auth/signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.message || "Failed to create account")
-      }
-
-      setIsEmailSent(true)
+      const state = encodeState({
+        type: "signup",
+        name: formData.name,
+        requestedAt: Date.now(),
+        redirect: "/",
+      });
+      const url = new URL(buildAppUrl("/verify"));
+      url.searchParams.set("type", "signup");
+      url.searchParams.set("state", state);
+      const response = await requestMagicLink({ email: formData.email, redirectUrl: url.toString(), state });
+      setIsEmailSent(true);
+      toast.success(response.message ?? "If this email is registered, you'll receive a magic link shortly.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create account. Please try again.")
+      const { message } = parseAxiosError(err);
+      setError(message);
+      toast.error(message);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   if (isEmailSent) {
     return (
@@ -57,23 +63,19 @@ export function SignupForm() {
         <div className="space-y-2">
           <h3 className="font-semibold text-foreground">Verify your email</h3>
           <p className="text-sm text-muted-foreground text-balance">
-            We've sent a verification link to <strong>{formData.email}</strong>. Click the link to activate your
-            account.
+            We've sent a verification link to <strong>{formData.email}</strong>. Click the link to activate your account.
           </p>
         </div>
         <div className="space-y-2">
           <Button variant="outline" onClick={() => setIsEmailSent(false)} className="w-full">
             Try different email
           </Button>
-          <Button variant="ghost" asChild className="w-full">
-            <Link to="/">Back to sign in</Link>
-          </Button>
         </div>
       </div>
-    )
+    );
   }
 
-  const isFormValid = formData.name.trim() && formData.email.trim()
+  const isFormValid = formData.name.trim() && formData.email.trim();
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -137,5 +139,5 @@ export function SignupForm() {
         By creating an account, you agree to our Terms of Service and Privacy Policy.
       </div>
     </form>
-  )
+  );
 }

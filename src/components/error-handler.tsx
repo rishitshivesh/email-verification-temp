@@ -1,19 +1,44 @@
-import { Link, useSearchParams } from "react-router-dom"
+import { useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { toast } from "react-hot-toast";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { XCircle, RefreshCw, ArrowLeft, Mail, AlertTriangle } from "lucide-react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { getDefaultLoginRedirect, requestMagicLink, parseAxiosError } from "@/lib/auth-service";
+import { buildAppUrl } from "@/lib/config";
+import { XCircle, RefreshCw, ArrowLeft, Mail, AlertTriangle, Loader2 } from "lucide-react";
+
+type ErrorType = "verification-failed" | "login-failed" | "expired" | "rate-limit" | "network" | "default";
+
+const encodeState = (state: unknown) => window.btoa(JSON.stringify(state));
 
 export function ErrorHandler() {
-  const [searchParams] = useSearchParams()
+  const [searchParams] = useSearchParams();
+  const [isResending, setIsResending] = useState(false);
 
-  const type = searchParams.get("type") || "default"
-  const message = searchParams.get("message")
-  const email = searchParams.get("email")
+  const type = (searchParams.get("type") as ErrorType | null) ?? "default";
+  const message = searchParams.get("message");
+  const email = searchParams.get("email");
 
-  const getErrorConfig = (type: string) => {
+  const flowType = useMemo<"login" | "signup" | "verification">(() => {
     switch (type) {
+      case "verification-failed":
+        return "verification";
+      case "login-failed":
+      case "expired":
+      case "rate-limit":
+      case "network":
+      case "default":
+      default:
+        return "login";
+    }
+  }, [type]);
+
+  const defaultRedirect = useMemo(() => getDefaultLoginRedirect(), []);
+
+  const getErrorConfig = (errorType: ErrorType) => {
+    switch (errorType) {
       case "verification-failed":
         return {
           title: "Verification Failed",
@@ -26,7 +51,7 @@ export function ErrorHandler() {
           showResend: true,
           primaryAction: { text: "Request New Link", href: "/signup" },
           secondaryAction: { text: "Back to Sign In", href: "/" },
-        }
+        };
 
       case "login-failed":
         return {
@@ -39,7 +64,7 @@ export function ErrorHandler() {
           showResend: true,
           primaryAction: { text: "Try Again", href: "/" },
           secondaryAction: { text: "Create Account", href: "/signup" },
-        }
+        };
 
       case "expired":
         return {
@@ -52,7 +77,7 @@ export function ErrorHandler() {
           showResend: true,
           primaryAction: { text: "Get New Link", href: "/" },
           secondaryAction: null,
-        }
+        };
 
       case "rate-limit":
         return {
@@ -65,7 +90,7 @@ export function ErrorHandler() {
           showResend: false,
           primaryAction: { text: "Back to Sign In", href: "/" },
           secondaryAction: null,
-        }
+        };
 
       case "network":
         return {
@@ -78,7 +103,7 @@ export function ErrorHandler() {
           showResend: false,
           primaryAction: { text: "Try Again", href: "#", onClick: () => window.location.reload() },
           secondaryAction: { text: "Back to Sign In", href: "/" },
-        }
+        };
 
       default:
         return {
@@ -93,14 +118,14 @@ export function ErrorHandler() {
           showResend: false,
           primaryAction: { text: "Try Again", href: "/" },
           secondaryAction: { text: "Contact Support", href: "/support" },
-        }
+        };
     }
-  }
+  };
 
-  const config = getErrorConfig(type)
-  const IconComponent = config.icon
+  const config = getErrorConfig(type);
+  const IconComponent = config.icon;
 
-  const isInternalLink = (href: string | undefined) => !!href && href.startsWith("/")
+  const isInternalLink = (href: string | undefined) => !!href && href.startsWith("/");
 
   const renderPrimaryAction = () => {
     if (config.primaryAction.onClick) {
@@ -108,7 +133,7 @@ export function ErrorHandler() {
         <Button onClick={config.primaryAction.onClick} className="w-full">
           {config.primaryAction.text}
         </Button>
-      )
+      );
     }
 
     if (isInternalLink(config.primaryAction.href)) {
@@ -116,59 +141,67 @@ export function ErrorHandler() {
         <Button asChild className="w-full">
           <Link to={config.primaryAction.href!}>{config.primaryAction.text}</Link>
         </Button>
-      )
+      );
     }
 
     return (
       <Button asChild className="w-full">
         <a href={config.primaryAction.href}>{config.primaryAction.text}</a>
       </Button>
-    )
-  }
+    );
+  };
 
   const renderSecondaryAction = () => {
-    if (!config.secondaryAction) return null
+    if (!config.secondaryAction) return null;
 
     const content = (
       <>
         <ArrowLeft className="w-4 h-4 mr-2" />
         {config.secondaryAction.text}
       </>
-    )
+    );
 
     if (isInternalLink(config.secondaryAction.href)) {
       return (
         <Button variant="ghost" asChild className="w-full">
           <Link to={config.secondaryAction.href!}>{content}</Link>
         </Button>
-      )
+      );
     }
 
     return (
       <Button variant="ghost" asChild className="w-full">
         <a href={config.secondaryAction.href}>{content}</a>
       </Button>
-    )
-  }
+    );
+  };
 
   const handleResendEmail = async () => {
-    if (!email) return
+    if (!email) return;
 
+    setIsResending(true);
     try {
-      // This would call resend API
-      const response = await fetch("/api/auth/resend", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, type }),
-      })
-
-      if (response.ok) {
-        window.location.href = `/success?type=email-sent&email=${encodeURIComponent(email)}`
-      }
-    } catch (error) {
-      console.error("Failed to resend email:", error)
+      const statePayload = encodeState({
+        type: flowType,
+        requestedAt: Date.now(),
+        redirect: flowType === "login" ? defaultRedirect : "/",
+      });
+      const url = new URL(buildAppUrl("/verify"));
+      url.searchParams.set("type", flowType);
+      url.searchParams.set("state", statePayload);
+      const response = await requestMagicLink({ email, redirectUrl: url.toString(), state: statePayload });
+      toast.success(response.message ?? "We've sent a new email to your inbox.");
+      const successUrl = new URL(buildAppUrl("/success"));
+      successUrl.searchParams.set("type", "email-sent");
+      successUrl.searchParams.set("email", email);
+      window.location.href = successUrl.toString();
+    } catch (err) {
+      const parsed = parseAxiosError(err);
+      toast.error(parsed.message);
+    } finally {
+      setIsResending(false);
     }
-  }
+  };
 
   return (
     <Card className="border-0 shadow-lg">
@@ -196,9 +229,18 @@ export function ErrorHandler() {
 
           <div className="space-y-2">
             {config.showResend && email && (
-              <Button onClick={handleResendEmail} variant="outline" className="w-full bg-transparent">
-                <Mail className="w-4 h-4 mr-2" />
-                Resend to {email}
+              <Button onClick={handleResendEmail} variant="outline" className="w-full bg-transparent" disabled={isResending}>
+                {isResending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Mail className="w-4 h-4 mr-2" />
+                    Resend to {email}
+                  </>
+                )}
               </Button>
             )}
 
@@ -209,5 +251,5 @@ export function ErrorHandler() {
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }
