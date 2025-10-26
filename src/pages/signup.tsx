@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom"
+
 import { SignupForm } from "@/components/signup-form"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -22,9 +24,9 @@ export default function SignupPage() {
 
         <div className="text-center text-sm text-muted-foreground">
           Already have an account?{" "}
-          <a href="/" className="font-medium text-primary hover:underline transition-colors">
+          <Link to="/" className="font-medium text-primary hover:underline transition-colors">
             Sign in here
-          </a>
+          </Link>
         </div>
       </div>
     </div>

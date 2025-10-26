@@ -1,12 +1,11 @@
-"use client"
+import { Link, useSearchParams } from "react-router-dom"
 
-import { useSearchParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { CheckCircle, ArrowRight } from "lucide-react"
 
 export function SuccessHandler() {
-  const searchParams = useSearchParams()
+  const [searchParams] = useSearchParams()
 
   const type = searchParams.get("type") || "default"
   const email = searchParams.get("email")
@@ -77,6 +76,60 @@ export function SuccessHandler() {
 
   const config = getSuccessConfig(type)
 
+  const isInternalLink = (href: string | undefined) => !!href && href.startsWith("/")
+
+  const renderPrimaryAction = () => {
+    if (!config.primaryAction) return null
+
+    if (config.primaryAction.onClick) {
+      return (
+        <Button onClick={config.primaryAction.onClick} className="w-full">
+          {config.primaryAction.text}
+          <ArrowRight className="w-4 h-4 ml-2" />
+        </Button>
+      )
+    }
+
+    const actionContent = (
+      <>
+        {config.primaryAction.text}
+        <ArrowRight className="w-4 h-4 ml-2" />
+      </>
+    )
+
+    if (isInternalLink(config.primaryAction.href)) {
+      return (
+        <Button asChild className="w-full">
+          <Link to={config.primaryAction.href!}>{actionContent}</Link>
+        </Button>
+      )
+    }
+
+    return (
+      <Button asChild className="w-full">
+        <a href={config.primaryAction.href}>{actionContent}</a>
+      </Button>
+    )
+  }
+
+  const renderSecondaryAction = () => {
+    if (!config.secondaryAction) return null
+
+    if (isInternalLink(config.secondaryAction.href)) {
+      return (
+        <Button variant="ghost" asChild className="w-full">
+          <Link to={config.secondaryAction.href!}>{config.secondaryAction.text}</Link>
+        </Button>
+      )
+    }
+
+    return (
+      <Button variant="ghost" asChild className="w-full">
+        <a href={config.secondaryAction.href}>{config.secondaryAction.text}</a>
+      </Button>
+    )
+  }
+
   // Auto-redirect for login success
   if (config.autoRedirect && config.primaryAction?.href) {
     setTimeout(() => {
@@ -101,25 +154,9 @@ export function SuccessHandler() {
           </div>
 
           <div className="space-y-2 pt-2">
-            <Button onClick={config.primaryAction.onClick} asChild={!config.primaryAction.onClick} className="w-full">
-              {config.primaryAction.onClick ? (
-                <>
-                  {config.primaryAction.text}
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </>
-              ) : (
-                <a href={config.primaryAction.href}>
-                  {config.primaryAction.text}
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </a>
-              )}
-            </Button>
+            {renderPrimaryAction()}
 
-            {config.secondaryAction && (
-              <Button variant="ghost" asChild className="w-full">
-                <a href={config.secondaryAction.href}>{config.secondaryAction.text}</a>
-              </Button>
-            )}
+            {renderSecondaryAction()}
           </div>
         </div>
       </CardContent>
